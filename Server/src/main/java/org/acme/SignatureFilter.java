@@ -3,6 +3,7 @@ package org.acme;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.cert.CertificateExpiredException;
@@ -20,10 +21,13 @@ public class SignatureFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        System.out.println("Validando assinatura");
         // Obtem do Header da requisicao a assinatura e o certificado
         String signatureBase64 = requestContext.getHeaderString("X-Signature");
         String certBase64 = requestContext.getHeaderString("X-Certificate");
+
+        System.out.println("\n--- ETAPAS DE CRIPTOGRAFIA (SERVIDOR) ---");
+        System.out.println("[SERVIDOR ASSINATURA RECEBIDA (Base64)]: " + signatureBase64);
+        System.out.println("[SERVIDOR CERTIFICADO RECEBIDO (Base64)]: VALIDANDO CERTIFICADO...");
 
         // Caso esteja sem algum dos dois, retorna como não autorizado
         if (signatureBase64 == null || certBase64 == null) {
@@ -59,13 +63,19 @@ public class SignatureFilter implements ContainerRequestFilter {
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initVerify(publicKey);
             sig.update(entityBytes);
+
+            // Convertendo os bytes de volta para String para visualização
+            String dadosParaVerificar = new String(entityBytes, StandardCharsets.UTF_8);
+            System.out.println("[SERVIDOR DADOS RECONSTRUÍDOS PARA VERIFICAÇÃO]: " + dadosParaVerificar);
+
             boolean isValid = sig.verify(signatureBytes);
 
             if (!isValid) {
               // Retorna 403 se a assinatura for inválida
+              System.out.println("[SERVIDOR] Assinatura Inválida");
               requestContext.abortWith(Response.status(Response.Status.FORBIDDEN).entity("Assinatura inválida").build());
             }
-            System.out.println("Assinatura válida");
+            System.out.println("[SERVIDOR] Assinatura válida");
 
         } catch(CertificateExpiredException e) {
           requestContext.abortWith(Response.status(Response.Status.FORBIDDEN).entity("Certificado expirado").build());

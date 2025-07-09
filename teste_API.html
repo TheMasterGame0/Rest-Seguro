@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Teste da API Segura</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+        .container { border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        textarea { width: 98%; height: 150px; margin-bottom: 10px; }
+        input[type="text"] { width: 98%; padding: 8px; margin-bottom: 10px; }
+        pre { background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>Painel de Teste da API Segura</h1>
+
+    <div class="container">
+        <h2>Teste de Requisição GET</h2>
+        <label for="getPath">Parâmetro da URL (ex: minha-mensagem-secreta):</label>
+        <input type="text" id="getPath" value="minha-mensagem-secreta">
+        <button onclick="enviarGet()">Enviar Requisição GET</button>
+    </div>
+
+    <div class="container">
+        <h2>Teste de Requisição POST</h2>
+        <label for="jsonData">Corpo da Requisição (JSON):</label>
+        <textarea id="jsonData">
+{
+  "id_produto": 789,
+  "valor": 25.99,
+  "moeda": "BRL"
+}
+        </textarea>
+        <button onclick="enviarPost()">Enviar Requisição POST</button>
+    </div>
+
+    <div class="container">
+        <h2>Resposta do Servidor:</h2>
+        <pre id="resposta"></pre>
+    </div>
+
+    <script>
+        const respostaDiv = document.getElementById('resposta');
+
+        // Função para testar o GET
+        async function enviarGet() {
+            const pathParam = document.getElementById('getPath').value;
+            const url = `http://localhost:8081/cliente/get/${pathParam}`;
+            
+            respostaDiv.textContent = 'Aguardando resposta do GET...';
+
+            try {
+                const response = await fetch(url); // GET é o método padrão
+                
+                const data = await response.text(); 
+                respostaDiv.textContent = data;
+
+            } catch (error) {
+                respostaDiv.textContent = 'Erro ao fazer a requisição GET:\n' + error;
+            }
+        }
+
+        // Função para testar o POST
+        async function enviarPost() {
+            const url = 'http://localhost:8081/cliente/post';
+            const jsonData = document.getElementById('jsonData').value;
+            
+            respostaDiv.textContent = 'Aguardando resposta do POST...';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: jsonData,
+                });
+
+                const data = await response.json();
+                respostaDiv.textContent = JSON.stringify(data, null, 2);
+
+            } catch (error) {
+                respostaDiv.textContent = 'Erro ao fazer a requisição POST:\n' + error;
+            }
+        }
+    </script>
+</body>
+</html>

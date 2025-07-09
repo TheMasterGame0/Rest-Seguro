@@ -15,6 +15,7 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.GET;
@@ -22,6 +23,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -29,7 +31,7 @@ import jakarta.ws.rs.core.Response;
 @ApplicationScoped
 public class Cliente {
 
-    private String url = "http://localhost:8080/server";
+    private String url = "http://localhost:8080";
 
     @GET()
     @Path("/get/{body}")
@@ -53,22 +55,30 @@ public class Cliente {
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             System.out.println("Montando requisição");
             // Monta a requisicao
-            String urlCompleta = url + "/get/" + body;
+            String urlCompleta = url + "/server/get/" + body;
             HttpGet get = new HttpGet(urlCompleta);
             get.setHeader("Content-Type", "application/json");
             get.setHeader("X-Signature", signature);
             get.setHeader("X-Certificate", certBase64);
 
             // Executa a requisicao e trata a resposta
-            try (CloseableHttpResponse response = client.execute(get)) {
-                System.out.println("Assinatura: " + signature);
-                System.out.println("Certificado: " + certBase64);
+           try (CloseableHttpResponse response = client.execute(get)) {
+                int statusCode = response.getCode();
+                org.apache.hc.core5.http.HttpEntity entity = response.getEntity(); // Pega a entidade da resposta
+                String responseBody = ""; // Inicia com uma string vazia como padrão
 
-                System.out.println("GET Status: " + response.getCode());
-                System.out.println("GET Response: " + new String(response.getEntity().getContent().readAllBytes()));
+                // VERIFICAÇÃO CRUCIAL: Só tenta ler o corpo se ele existir!
+                if (entity != null) {
+                    responseBody = new String(entity.getContent().readAllBytes(), StandardCharsets.UTF_8);
+                }
 
-                return Response.status(response.getCode()).build();
+                System.out.println("Status (interno) recebido do Servidor: " + statusCode);
+                System.out.println("Response (interno) recebido do Servidor: " + responseBody);
+
+                // Constrói a resposta final para o navegador com o que foi obtido
+                return Response.status(statusCode).entity(responseBody).build();
             }
+
         } catch (Exception e) {
             System.out.println(e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
@@ -77,6 +87,47 @@ public class Cliente {
         System.out.println(e);
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
+    }
+
+    @POST()
+    @Path("/post")
+    @Consumes(MediaType.APPLICATION_JSON) // Este endpoint recebe o JSON que será enviado
+    public Response postData(String jsonBody) {
+        try {
+            System.out.println("Iniciando requisição POST...");
+            PrivateKey privateKey = CryptoUtils.loadPrivateKey("changeit", "client-key", "changeit");
+            X509Certificate certificate = (X509Certificate) CryptoUtils.loadCertificate("client-key", "changeit");
+
+            // Para POST, é assinado o próprio corpo da requisição
+            byte[] bodyBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+
+            System.out.println("\n--- ETAPAS DE CRIPTOGRAFIA (CLIENTE) ---");
+            System.out.println("[CLIENTE DADOS A SEREM ASSINADOS]: " + jsonBody);
+
+            String signature = CryptoUtils.signData(bodyBytes, privateKey);
+            System.out.println("[CLIENTE ASSINATURA GERADA (Base64)]: " + signature);
+
+            String certBase64 = Base64.getEncoder().encodeToString(certificate.getEncoded());
+            System.out.println("[CLIENTE CERTIFICADO (Base64)]: ENVIANDO CERTIFICADO...");
+            System.out.println("------------------------------------------\n");
+            
+            try (CloseableHttpClient client = HttpClients.createDefault()) {
+                HttpPost post = new HttpPost(url + "/server/data"); // Aponta para o novo endpoint POST do servidor
+                post.setHeader("Content-Type", "application/json");
+                post.setHeader("X-Signature", signature);
+                post.setHeader("X-Certificate", certBase64);
+                post.setEntity(new StringEntity(jsonBody, ContentType.APPLICATION_JSON));
+
+                try (CloseableHttpResponse response = client.execute(post)) {
+                    String responseBody = new String(response.getEntity().getContent().readAllBytes());
+                    System.out.println("POST Response: " + responseBody);
+                    return Response.status(response.getCode()).entity(responseBody).type(MediaType.APPLICATION_JSON).build();
+                }
+            }
+        } catch (Exception e) {
+            System.out.println(e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     // @POST()
