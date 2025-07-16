@@ -41,54 +41,74 @@
 \maketitle
 
 \begin{abstract}
-  Texto detalhando o desenvolvimento de uma versão simplificada do algoritmo de criptografia DES, denominado de S-DES, que realiza a encriptação e decriptação utilizando dois modos de operação, o ECB e CBC. Nele é utilizado uma chave de 10 bits e uma entrada de convertida em uma lista de bytes. 
-
-  \textbf{Palavras-chave}: Criptografia, DES, ECB, CBC.
+    
+    Esse trabalho aborda o desafio de assegurar a autenticidade e a integridade da dados transportados, propondo como objetivo o desenvolvimento de uma API RESTful segura, na qual cada requisição sensível inclui uma assinatura digital de sua carga útil (payload). Para isso, foi desenvolvido um protótipo cliente-servidor utilizando a linguagem de programação Java e o framework Quarkus. A camada de segurança foi implementada por meio da geração de um hash SHA-256 do corpo da mensagem, que é então assinado com um algoritmo RSA, utilizando um certificado digital autoassinado armazenado em uma keystore.
+  \textbf{Palavras-chave}: API REST, Segurança Computacional, Assinatura Digital, Java, Quarkus.
 \end{abstract}
 
-Nesse trabalho foi proposto o desenvolvimento de uma API que utilizasse do conteúdo visto ao longo da disciplina para garantir alguma forma de segurança nas requisições feitas a API. Para a realização desse trabalho, foi utilizada a linguagem de programação Java com o framework Quarkus e o auxílio de bibliotecas para a realização das requisições.
+\section{Introdução}
 
-\section{API Rest}
-Para dar início no desenvolvimento do trabalho, é preciso desenvolver uma aplicação que possua as características mínimas de uma API baseado no sistema REST. As principais características levadas em consideração para o desenvolvimento da API REST simbólica para o trabalho foram:
+A arquitetura REST (Representational State Transfer) define um conjunto de restrições para a criação de sistemas de hipermídiam distribuídos. Uma API que adere a esse princípios conhecida como RESTful, é organizada em torno de recursos que são identificados por URLs únicas. A interação com esses recursos é realizada por meio dos métodos padrões do protocolo HTTP, como GET, POST e PUT. Uma característica fundamental dessa arquitetura é ser stateless, o que significa que cada requisição envidada do cliente para o servidor deve conter toda a informação necessária para ser processada, sem que o servidor precise manter um estado da sessão do cliente.
+
+
+Embora essa arquitetura simplifique a comunicação cliente-servidor, o protocolo HTPP por si só não oferece garantias sobre a identidade do remetente ou a integridade dos dados na camada de aplicação. Em cenários que envolvem o envio de dados confidenciais ou comandos críticos, é essencial que seja adicionada uma camada de segurança que previna a manipulação ou a falsificação de requisições.
+
+Este trabalho aborda esse problema através da implementação de uma API RESTful segura. O objetivo é aplicar uma assinatura digital na carga útil (payload) de cada requisição, garantindo assim a autenticidade (comprovação da identidade do remetente) e a integridade (não alteração de dados). O protótipo foi desenvolvido em Java com o framework Quarkus, dividido em um módulo Servidor, que expõe os endpoints, e um módulo Cliente, que consome esses endpoints e interage com uma interface web usada para testes.
+
+\section{Arquitetura da Aplicação}
+
+O sistema foi projetado seguindo uma arquitetura cliente-servidor, composta por dois módulos principais desenvolvidos em Java com o framework Quarkus:
 
 \begin{itemize}
-  \item Ser Stateless, ou seja, cada requisição deve ter todas as informações necessárias para o tratamento da requisição;
-  \item Fazer uso dos métodos HTTP (GEt, POSt, PUT, \dots);
-  \item Ser baseada em recursos, sendo organizada por funções que são identificadas por URLs únicas.
+    \item \textbf{Módulo Servidor}: Funciona como a API REST principal. Foram expostos dois endpoints para manipulação de recursos:
+    \begin{itemize}
+        \item \textbf{POST /server/post}: Endpoint que recebe dados no corpo (payload) da requisição HTTP.
+        \item  \textbf{GET /server/get/{body}}: Endpoint que recebe dados como um parâmetro na própria URL da requisição.
+    \end{itemize}
+    \item  \textbf{Módulo Cliente}: Atua como um intermediário que consome a API do Servidor. Este módulo também expõe uma API REST, projetada para ser consumida por uma interfaca web (HTML), simplificando a interação e os testes. É nesse módulo que a lógica de assinatura digital das requisições é executada antes de serem enviadas ao Servidor.
 \end{itemize}
 
-Baseado nessas características o módulo \textbf{Servidor} da API foi desenvolvido, possuindo 2 endpoints, um para requisições GET e outro para requisições POST. O método GET foi definido para ser acessado por meio do caminho \blue{server/get/\{body\}}, no qual o parâmetro \blue{body} representa a informação necessária para a consulta ao servidor, enquanto o método POST é acessado pelo caminho \blue{server/post} que deverá receber um corpo na requisição HTTP para a obtenção dos dados necessário para o servidor. o Código implementado está na imagem \ref{fig:Endpoints}
+A segurança das requisições é centralizada na classe SignatureFilter no lado do Servidor. Esta classe funciona como um filtro que intercepta todas as chamadas recebidas, substituindo o comportamento padrão da aplicação para executar a lógica de verificação da assinatura antes de permitir que a requisição prossiga para os endpoints.
+
+\section{Implementação da Camada de Segurança}
+
+A segurança da API é baseada em um sistema de assinatura digital assimétrica (RSA) para garantir a autenticidade e a integridade de cada mensagem. Diferentemente de uma abordagem com chaves pré-compartilhadas, o cliente envia seu certificado digital junto com cada requisição, permitindo que o servidor utilize a chave pública contida nele para a verificação.
+
+\subsection{Geração e Gerenciamento de Chaves}
+
+Para o protótipo, foi gerado um certificado digital X.509 autoassinado, contendo um par de chaves RSA de 2048 bits. Esse certificado foi armazenado em um arquivo Java KeyStore (client-keystore.jks).
+
+O acesso programático à keystore é realizado pela classe de utilitários CryptoUtils.java \ref{fig:CryptoUtils}. Ela é responsável por carregar a chave privada, usada pelo cliente para assinar os dados, e o certificado, que é enviado na requisição.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width = 0.8\linewidth]{Imagens/Endpoints.png}  
-    \label{fig:Endpoints}
-\end{figure}
-
-Para o desenvolvimento da parte responsável por realizar a segurança da API, foi adicionada a classe \textbf{SignatureFilter} que será responsável por substituir o filtro padrão utilizado pela aplicação pela versão personalizada que será desenvolvida.
-
-Na parte do cliente que será responsável por acessar a API do servidor, foi desenvolvido o módulo \textbf{Cliente} que também possui 2 endpoints, se enquadrando como uma API REST se deixada separada, dedicado a interagir com uma tela HTML. Essa abordagem foi escolhida para simplificar a realização dos testes e deixar a visualização mais amigável para o usuário, e assim criando um sistema composto por requisições feitas a um servidor a partir de uma aplicação web, composta pela tela (HTML) e o seu backend (cliente). No módulo cliente também foram inseridos as funcionalidades ligadas a etapa de segurança do trabalho. 
-
-\section{Camada de segurança}
-O processo de segurança escolhido para a aplicação foi o de fornecer autenticidade as requisições trocadas do cliente ao servidor. Nesse contexto, foi utilizado um sistema baseado em certificado digital, o qual é utilizado para assinar as mensagens a serem enviadas e por meio da chave pública verificar a autenticidade da assinatura. 
-
-Para iniciar o processo, precisamos criar um certificado para ser utilizado nas nossas requisições. Nesse sentido, foi utilizada a própria JWT do java com a keystore para gerar um certificado autoassinado, que para os propósitos de teste teriam todos os recursos necessário, embora não transmita credibilidade em situações reais de utilização de algum sistema, precisando algum terceiro certificar esse certificado. Para a realização dos acessos aos dados de certificado do usuário foi criada a classe \textbf{CryptoUtils} (\ref{fig:CryptoUtils}) que recebe as credenciais de acesso ao certificado e retorna a aplicação o certificado e a chave privada. 
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width = 0.8\linewidth]{Imagens/CryptoUtils.png}  
+    \includegraphics[width=0.8\linewidth]{Imagens/CryptoUtils.png}  
+    \caption{Métodos da classe CryptoUtils para carregar a chave privada e o certificado da keystore.}
     \label{fig:CryptoUtils}
 \end{figure}
 
-No processo de garantia da autenticidade da mensagem a ser encaminhada ao servidor, o corpo da mensagem a ser enviada é transformada em um \textbf{hash} por meio do algoritmo SHA-256 e é assinado utilizando o RSA, ou seja, criptografa o hash obtido da etapa anterior utilizando a chave privada do usuário, podendo ser revertida a mensagem original com a chave pública e por esse motivo não garante confidenciabilidade nesse processo. 
+\subsection{Fluxo da Requisição Segura}
+O processo de assinatura e verificação é executado a cada chamada à API seguindo os seguites passos:
+\begin{enumerate}
+    \item \textbf{Assinatura}:
+    \begin{itemize}
+        \item \textbf{Seleção dos Dados}: Os dados a serem assinados são definidos com base no método HTTP. Para requisições POST, utiliza-se o próprio corpo (payload) da requisição. Para requisições GET, que não possuem corpo, constrói-se uma string canônica concatenando o nome do método e o caminho da requisição (ex: "GET - /server/get/meus-dados").
+        \item \textbf{Geração da Assinatura}: Os dados selecionados são transformados em um hash com o algoritmo SHA-256, que é então criptografado com a chave privada do cliente via RSA. Este processo é encapsulado no método CryptoUtils.signData.
+        \item \textbf{Montagem da Requisição}: O certificado do cliente e a assinatura digital gerada são codificados em Base64 e adicionados a dois cabeçalhos HTTP customizados: X-Certificate e X-Signature, respectivamente. A requisição é então enviada ao servidor.
+    \end{itemize}
+    \item \textbf{Verificação}:
+    \begin{itemize}
+        \item \textbf{Extração de Dados}: O filtro intercepta a requisição e extrai o conteúdo dos cabeçalhos X-Certificate e X-Signature. Se algum deles estiver ausente, a requisição é negada.
+
+        \item \textbf{Validação do Certificado}: O certificado recebido é decodificado e sua validade é verificada com o método cert.checkValidity(). A chave pública é extraída do certificado validado.
+
+        \item  \textbf{Reconstrução dos Dados}: O servidor reconstrói a mensagem original que foi assinada, seguindo a mesma lógica do cliente: para POST, lê o corpo da requisição; para GET, concatena o método e o caminho.
+
+        \item \textbf{Verificação da Assinatura}: Com a chave pública, o servidor decriptografa a assinatura para obter o hash original. Este hash é comparado com um novo hash calculado a partir dos dados reconstruídos. Se os hashes corresponderem, a assinatura é válida (sig.verify()), e a requisição pode prosseguir. Caso contrário, ou se o certificado estiver expirado, a requisição é abortada com um status 403 Forbidden.
 
 
-\subsection{GET}
-Para a requisição do tipo GET, a qual não possui um corpo de requisição, foi preciso
-
-\subsection{POST}
-Nas requisições feitas por meio do post, o próprio corpo da mensagem foi utilizado para a assinatura, sem a inclusão de elementos adicionais;
-
+    \end{itemize}
+\end{enumerate}
 
 \section{Problemas observados}
 Durante a implementação alguns problemas de segurança foram observados no protótipo final obtido. Os principais problemas observados foram:
@@ -97,19 +117,6 @@ Durante a implementação alguns problemas de segurança foram observados no pro
   \item Falta de meios para as credenciais do usuário serem passadas a aplicação (cliente), sendo uma falha para a segurança do processo;
   \item Falta de confidenciabilidade da mensagem enviada;
 \end{itemize}
-
-Dentre as soluções para os problemas encontrados estão:
-\begin{itemize}
-  \item Utilização de tokens nas requisições;
-  \item Ao transferir a autenticidade para outro meio (token), a confidenciabilidade do processo pode ser melhorada de maneira mais simples;
-\end{itemize}
-
-
-
-% \begin{lstlisting}[language=Python]
-% def permutation(s: str, indices: list[int]) -> str:
-%     return ''.join(s[i] for i in indices)
-% \end{lstlisting}
 
 \section{Código}
 O código está disponível no github pelo link: \href{https://github.com/TheMasterGame0/Rest-Seguro}{https://github.com/TheMasterGame0/Rest-Seguro}
